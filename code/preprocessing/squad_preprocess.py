@@ -21,6 +21,11 @@ import argparse
 import json
 import nltk
 import numpy as np
+
+import matplotlib as mpl
+mpl.use('TkAgg')
+import matplotlib.pyplot as plt
+
 from tqdm import tqdm
 from six.moves.urllib.request import urlretrieve
 
@@ -164,10 +169,18 @@ def preprocess_and_write(dataset, tier, out_dir):
     Returns:
       the number of (context, question, answer) triples written to file by the dataset.
     """
+    #Set to true to see a graph of the context/question lengths.
+    dataVisualization = False
 
     num_exs = 0 # number of examples written to file
     num_mappingprob, num_tokenprob, num_spanalignprob = 0, 0, 0
     examples = []
+
+    paragraph_context_lengths = []
+    question_lengths = []
+    question_printed = False;
+    context_printed = False;
+    debugging = True;
 
     for articles_id in tqdm(range(len(dataset['data'])), desc="Preprocessing {}".format(tier)):
 
@@ -184,6 +197,16 @@ def preprocess_and_write(dataset, tier, out_dir):
             context_tokens = tokenize(context) # list of strings (lowercase)
             context = context.lower()
 
+            #Preprocessing Choice: Cap Question Lenght at 20
+            if len(context_tokens) > 400:
+                    continue;
+
+            # For debuging purposes:
+            if not context_printed and debugging:
+                print "The context:" + context + "\n The length" + str(len(context.split(" ")))
+                context_printed = True;
+            paragraph_context_lengths.append(len(context.split(" ")));
+
             qas = article_paragraphs[pid]['qas'] # list of questions
 
             charloc2wordloc = get_char_word_loc_mapping(context, context_tokens) # charloc2wordloc maps the character location (int) of a context token to a pair giving (word (string), word loc (int)) of that token
@@ -198,6 +221,13 @@ def preprocess_and_write(dataset, tier, out_dir):
                 # read the question text and tokenize
                 question = unicode(qn['question']) # string
                 question_tokens = tokenize(question) # list of strings
+                #Preprocessing Choice: Cap Question Lenght at 20
+                if len(question_tokens) > 20:
+                    continue;
+                if not question_printed and debugging:
+                    print "The question:" + question + "\n The length" + str(len(question_tokens))
+                    question_printed = True;
+                question_lengths.append(len(question_tokens));
 
                 # of the three answers, just take the first
                 ans_text = unicode(qn['answers'][0]['text']).lower() # get the answer text
@@ -235,6 +265,18 @@ def preprocess_and_write(dataset, tier, out_dir):
     print "Number of (context, question, answer) triples discarded due character span alignment problems (usually Unicode problems): ", num_spanalignprob
     print "Processed %i examples of total %i\n" % (num_exs, num_exs + num_mappingprob + num_tokenprob + num_spanalignprob)
 
+    print "Context and Question lenghts"
+    if dataVisualization:
+        # fig, axs = plt.subplots(1, 2,tight_layout=True)
+        print sum(question_lengths)/len(question_lengths)
+        plt.figure(1)
+        plt.subplot(211)
+        plt.hist(paragraph_context_lengths,30)
+        plt.title('Train Context Word Lengths')
+        plt.subplot(212)
+        plt.hist(question_lengths, 30)
+        plt.title('Train Question Word Lengths')
+        plt.show()
     # shuffle examples
     indices = range(len(examples))
     np.random.shuffle(indices)

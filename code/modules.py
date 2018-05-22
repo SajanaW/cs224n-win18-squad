@@ -64,9 +64,9 @@ class RNNEncoder(object):
         with vs.variable_scope("RNNEncoder"):
             input_lens = tf.reduce_sum(masks, reduction_indices=1) # shape (batch_size)
 
-            # Note: fw_out and bw_out are the hidden states for every timestep.
-            # Each is shape (batch_size, seq_len, hidden_size).
-            (fw_out, bw_out), _ = tf.nn.bidirectional_dynamic_rnn(self.rnn_cell_fw, self.rnn_cell_bw, inputs, input_lens, dtype=tf.float32)
+                    # Note: fw_out and bw_out are the hidden states for every timestep.
+                    # Each is shape (batch_size, seq_len, hidden_size).
+                    (fw_out, bw_out), _ = tf.nn.bidirectional_dynamic_rnn(self.rnn_cell_fw, self.rnn_cell_bw, inputs, input_lens, dtype=tf.float32)
 
             # Concatenate the forward and backward hidden states
             out = tf.concat([fw_out, bw_out], 2)
@@ -115,6 +115,81 @@ class SimpleSoftmaxLayer(object):
             return masked_logits, prob_dist
 
 
+
+class AttentionFlowLayer():
+    """ Author: Sajana Weerawardhena
+        Drawn from Paper: BiDaf
+        and implementations online: ""
+        TODO: Connect this to QA Model
+        This layer is the Attention Flow Layer described in the Bidaf Paper
+        that you can find here: (URL)
+
+    """
+
+    def __init__():
+        """ For the moment, not going to introduce dropout
+            regularizing lambdas for the fully connected layers.
+            When it will be introduced, init:
+             keep_prob,lambda
+            """
+        pass
+    def sim_matrix(self, context_vectors, n_context_vectors,
+                    question_vectors, n_question_vectors, vector_size):
+
+            """Goal: W_sim^T [c; q; c*q] of shape
+            Inputs:
+                context_vectors: (type: tensor) Set of Context vectors : (batch_size, lenght_of_a_context_vector, n_context_vectors).
+                n_context_vectors: (type: tensor) Number of context vectors.
+                question_vectors: (type: tensor) Set of Question vectors: (batch_size, lenght_of_a_question_vector, n_question_vectors).
+                n_question_vectors: (type: tensor) Number of question vectors.
+                vector_size: (type: int) Size of each context and question vector (i.e context_vectors.shape.as_list()[2])
+            Output:
+                siml_mat : (type: tensor) Similarity matrix  (batch_size, n_context_vectors, n_question_vectors).
+            """
+            batch_size = context_vectors.shape[0]
+            x_cv = tf.reshape(context_vectors,[-1,vector_size])
+            x_qv = tf.reshape(question_vectors,[-1, vector_size])
+            x_cq = tf.reshape(tf.expand_dims(context_vectors, 2) * tf.expand_dims(question_vectors, 1), [-1, vector_size])
+            """ [c; q; c*q] vector: """
+            x_cqcq = tf.concat([x_cv,x_qv,x_cq],0)
+
+            y_cqcq = tf_layers.fully_connected(x_cqcq, 1, activation_fn=None)
+            y_cqcq = tf.reshape(y_cqcq, [-1,n_context_vectors, n_question_vectors ])
+            Assert(y_cqcq.shape == (batch_size,n_context_vectors, n_question_vectors ))
+
+            return y_cqcq
+
+    def beta_func(context_vectors, c2q_attn, q2c_attn):
+        """Apply the beta function for bidaf attention flow
+           Goal: concatenate [c, c2q_attn, c * c2q_attn, c * q2c_attn].
+        """
+        return tf.concat([context_vectors, c2q_attn, context_vectors * c2q_attn, context_vectors * q2c_attn], axis=2)
+
+    def build_graph(self, context_vectors, context_mask, n_context_vectors,
+                        question_vectors, question_mask, n_question_vectors):
+        """Build the BiDAF attention layer component for the compute graph.
+        """
+        with tf.variable_scope(scope):
+            vector_size = context_vectors.get_shape().as_list()[2]
+            sim_mat = self.sim_matrix(context_vectors, n_context_vectors, question_vectors, n_question_vectors, vector_size)
+
+            # c2q
+            question_mask_expanded = tf.expand_dims(question_mask, axis=1)
+            _, sim_bar = masked_softmax(sim_mat, question_mask_expanded, 2)
+            c2q_attn = tf.matmul(sim_bar, question_vectors)
+
+            # q2c
+            context_mask_expanded = tf.expand_dims(c_mask, axis=2)
+            _, sim_dbl_bar = masked_softmax(sim_mat, c_mask_expanded, 1)
+            sim_dbl_bar = tf.transpose(sim_dbl_bar, (0, 2, 1))
+            sim_sim = tf.matmul(sim_bar, sim_dbl_bar)
+            q2c_attn = tf.matmul(sim_sim, context_vectors)
+
+            outputs = self.beta_func(c_vecs, c2q_attn, q2c_attn)
+
+        return outputs
+
+""" The base line attention"""
 class BasicAttn(object):
     """Module for basic attention.
 
