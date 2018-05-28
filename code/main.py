@@ -25,7 +25,7 @@ import logging
 
 import tensorflow as tf
 
-from qa_model import QAModel
+from bidaf_model import QAModel #or do  from bidaf_model ..
 from vocab import get_glove
 from official_eval_helper import get_json_data, generate_answers
 

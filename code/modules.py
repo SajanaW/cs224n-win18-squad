@@ -15,6 +15,7 @@
 """This file contains some basic model components"""
 
 import tensorflow as tf
+import tensorflow.contrib.layers as tf_layers
 from tensorflow.python.ops.rnn_cell import DropoutWrapper
 from tensorflow.python.ops import variable_scope as vs
 from tensorflow.python.ops import rnn_cell
@@ -64,9 +65,9 @@ class RNNEncoder(object):
         with vs.variable_scope("RNNEncoder"):
             input_lens = tf.reduce_sum(masks, reduction_indices=1) # shape (batch_size)
 
-                    # Note: fw_out and bw_out are the hidden states for every timestep.
-                    # Each is shape (batch_size, seq_len, hidden_size).
-                    (fw_out, bw_out), _ = tf.nn.bidirectional_dynamic_rnn(self.rnn_cell_fw, self.rnn_cell_bw, inputs, input_lens, dtype=tf.float32)
+            # Note: fw_out and bw_out are the hidden states for every timestep.
+            # Each is shape (batch_size, seq_len, hidden_size).
+            (fw_out, bw_out), _ = tf.nn.bidirectional_dynamic_rnn(self.rnn_cell_fw, self.rnn_cell_bw, inputs, input_lens, dtype=tf.float32)
 
             # Concatenate the forward and backward hidden states
             out = tf.concat([fw_out, bw_out], 2)
@@ -116,7 +117,7 @@ class SimpleSoftmaxLayer(object):
 
 
 
-class AttentionFlowLayer():
+class AttentionFlowLayer(object):
     """ Author: Sajana Weerawardhena
         Drawn from Paper: BiDaf
         and implementations online: ""
@@ -126,66 +127,73 @@ class AttentionFlowLayer():
 
     """
 
-    def __init__():
+    def __init__(self):
         """ For the moment, not going to introduce dropout
             regularizing lambdas for the fully connected layers.
             When it will be introduced, init:
              keep_prob,lambda
             """
-        pass
-    def sim_matrix(self, context_vectors, n_context_vectors,
-                    question_vectors, n_question_vectors, vector_size):
+    def sim_matrix(self, context_vectors, n_context_vectors, question_vectors, n_question_vectors, batch_size,vector_size):
 
             """Goal: W_sim^T [c; q; c*q] of shape
             Inputs:
-                context_vectors: (type: tensor) Set of Context vectors : (batch_size, lenght_of_a_context_vector, n_context_vectors).
+                context_vectors: (type: tensor) Set of Context vectors : (batch_size, n, 2h).
                 n_context_vectors: (type: tensor) Number of context vectors.
-                question_vectors: (type: tensor) Set of Question vectors: (batch_size, lenght_of_a_question_vector, n_question_vectors).
+                question_vectors: (type: tensor) Set of Question vectors: (batch_size,m,2h).
                 n_question_vectors: (type: tensor) Number of question vectors.
-                vector_size: (type: int) Size of each context and question vector (i.e context_vectors.shape.as_list()[2])
             Output:
                 siml_mat : (type: tensor) Similarity matrix  (batch_size, n_context_vectors, n_question_vectors).
             """
-            batch_size = context_vectors.shape[0]
-            x_cv = tf.reshape(context_vectors,[-1,vector_size])
-            x_qv = tf.reshape(question_vectors,[-1, vector_size])
-            x_cq = tf.reshape(tf.expand_dims(context_vectors, 2) * tf.expand_dims(question_vectors, 1), [-1, vector_size])
-            """ [c; q; c*q] vector: """
-            x_cqcq = tf.concat([x_cv,x_qv,x_cq],0)
 
-            y_cqcq = tf_layers.fully_connected(x_cqcq, 1, activation_fn=None)
-            y_cqcq = tf.reshape(y_cqcq, [-1,n_context_vectors, n_question_vectors ])
-            Assert(y_cqcq.shape == (batch_size,n_context_vectors, n_question_vectors ))
+            """c; of shape: batch_size,n,2h ->  batch_size,n,1,2h"""
+            c = tf.expand_dims(context_vectors, 2)
+            c = tf.tile(c, [1,1,n_question_vectors,1])
+            """c; of shape: batch_size,m,2h ->  batch_size,1,m,2h"""
+            q = tf.expand_dims(question_vectors, 1)
+            q = tf.tile(q, [1,n_context_vectors,1,1])
+            c_mul_q = tf.expand_dims(context_vectors, 2) * tf.expand_dims(question_vectors, 1)
+            """ [c; q; c*q] shape batch_size,n,m,6h  """
+            x = tf.concat([c,q,c_mul_q],3)
+            x = tf.reshape(x,[-1, 3*vector_size])
+            y_cont = tf_layers.fully_connected(x,1, activation_fn=None)
+            print(y_cont)
+            y_cont = tf.reshape(y_cont,[-1,n_context_vectors, n_question_vectors]);
 
-            return y_cqcq
+            # Assert(y_cqcq.shape == (batch_size,n_context_vectors, n_question_vectors ))
 
-    def beta_func(context_vectors, c2q_attn, q2c_attn):
+            return y_cont
+
+    def beta_func(self,context_vectors, c2q_attn, q2c_attn):
         """Apply the beta function for bidaf attention flow
            Goal: concatenate [c, c2q_attn, c * c2q_attn, c * q2c_attn].
         """
         return tf.concat([context_vectors, c2q_attn, context_vectors * c2q_attn, context_vectors * q2c_attn], axis=2)
 
-    def build_graph(self, context_vectors, context_mask, n_context_vectors,
-                        question_vectors, question_mask, n_question_vectors):
+    def build_graph(self, context_vectors, c_mask,
+                        question_vectors, q_mask,scope):
         """Build the BiDAF attention layer component for the compute graph.
         """
         with tf.variable_scope(scope):
-            vector_size = context_vectors.get_shape().as_list()[2]
-            sim_mat = self.sim_matrix(context_vectors, n_context_vectors, question_vectors, n_question_vectors, vector_size)
+            # vector_size = context_vectors.get_shape().as_list()[2]
+            batch_size = context_vectors.shape.as_list()[0]
+            vector_size = context_vectors.shape.as_list()[2] #2h
+            n_context_vectors = context_vectors.shape.as_list()[1]
+            n_question_vectors = question_vectors.shape.as_list()[1]
+            sim_mat = self.sim_matrix(context_vectors, n_context_vectors, question_vectors, n_question_vectors,batch_size, vector_size)
 
             # c2q
-            question_mask_expanded = tf.expand_dims(question_mask, axis=1)
+            question_mask_expanded = tf.expand_dims(q_mask, axis=1)
             _, sim_bar = masked_softmax(sim_mat, question_mask_expanded, 2)
             c2q_attn = tf.matmul(sim_bar, question_vectors)
 
             # q2c
             context_mask_expanded = tf.expand_dims(c_mask, axis=2)
-            _, sim_dbl_bar = masked_softmax(sim_mat, c_mask_expanded, 1)
+            _, sim_dbl_bar = masked_softmax(sim_mat, context_mask_expanded, 1)
             sim_dbl_bar = tf.transpose(sim_dbl_bar, (0, 2, 1))
             sim_sim = tf.matmul(sim_bar, sim_dbl_bar)
             q2c_attn = tf.matmul(sim_sim, context_vectors)
 
-            outputs = self.beta_func(c_vecs, c2q_attn, q2c_attn)
+            outputs = self.beta_func(context_vectors, c2q_attn, q2c_attn)
 
         return outputs
 
