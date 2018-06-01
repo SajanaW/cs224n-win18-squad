@@ -45,9 +45,9 @@ class RNNEncoder(object):
         """
         self.hidden_size = hidden_size
         self.keep_prob = keep_prob
-        self.rnn_cell_fw = rnn_cell.GRUCell(self.hidden_size)
+        self.rnn_cell_fw = rnn_cell.LSTMCell(self.hidden_size)
         self.rnn_cell_fw = DropoutWrapper(self.rnn_cell_fw, input_keep_prob=self.keep_prob)
-        self.rnn_cell_bw = rnn_cell.GRUCell(self.hidden_size)
+        self.rnn_cell_bw = rnn_cell.LSTMCell(self.hidden_size)
         self.rnn_cell_bw = DropoutWrapper(self.rnn_cell_bw, input_keep_prob=self.keep_prob)
 
     def build_graph(self, inputs, masks):
@@ -156,7 +156,6 @@ class AttentionFlowLayer(object):
             x = tf.concat([c,q,c_mul_q],3)
             x = tf.reshape(x,[-1, 3*vector_size])
             y_cont = tf_layers.fully_connected(x,1, activation_fn=None)
-            print(y_cont)
             y_cont = tf.reshape(y_cont,[-1,n_context_vectors, n_question_vectors]);
 
             # Assert(y_cqcq.shape == (batch_size,n_context_vectors, n_question_vectors ))
@@ -282,3 +281,19 @@ def masked_softmax(logits, mask, dim):
     masked_logits = tf.add(logits, exp_mask) # where there's padding, set logits to -large
     prob_dist = tf.nn.softmax(masked_logits, dim)
     return masked_logits, prob_dist
+
+def char_cnn():
+    """ Author: Sajana Weerawardhena
+        Drawn from Paper: BiDaf
+        Implementing a simple char_cnn for character embedding layer.
+    """
+    def __init__(self,kernel_size,CNN_filters, stride):
+        """ A simple init"""
+        self.kernal_size = kernal_size;
+        self.CNN_filters = CNN_filters;
+        self.stride = stride
+    def build_graph(self,word_ids,):
+        pass;
+        # with ...
+        #     y_conv = tf_layers.conv1d(inputs= word_ids, filters=self.CNN_filters,kernel_size=self.kernal_size ,strides=stride, activation=softmax,trainable=True);
+        # return y_conv

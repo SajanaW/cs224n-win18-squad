@@ -70,6 +70,7 @@ class QAModel(object):
         # Define optimizer and updates
         # (updates is what you need to fetch in session.run to do a gradient update)
         self.global_step = tf.Variable(0, name="global_step", trainable=False)
+
         """@Saj Try different Betas here"""
         opt = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate) # you can try other optimizers
         self.updates = opt.apply_gradients(zip(clipped_gradients, params), global_step=self.global_step)
@@ -95,6 +96,10 @@ class QAModel(object):
         self.qn_mask = tf.placeholder(tf.int32, shape=[None, self.FLAGS.question_len])
         self.ans_span = tf.placeholder(tf.int32, shape=[None, 2])
 
+        #going to be plugged into the 1char_cnn
+        self.context_word_ids = tf.placeholder(tf.int32,shape=[None,self.FLAGS.context_len, self.FLAGS.word_len])
+        self.question_word_ids = tf.placeholder(tf.int32,shape=[None,self.FLAGS.question_len, self.FLAGS.word_len])
+
         # Add a placeholder to feed in the keep probability (for dropout).
         # This is necessary so that we can instruct the model to use dropout when training, but not when testing
         self.keep_prob = tf.placeholder_with_default(1.0, shape=())
@@ -118,6 +123,11 @@ class QAModel(object):
             self.context_embs = embedding_ops.embedding_lookup(embedding_matrix, self.context_ids) # shape (batch_size, context_len, embedding_size)
             self.qn_embs = embedding_ops.embedding_lookup(embedding_matrix, self.qn_ids) # shape (batch_size, question_len, embedding_size)
 
+    def add_char_cnn_layer(self):
+        """
+        Adds character embedding layer to the graph.
+        """
+
 
     def build_graph(self):
         """Builds the main part of the graph for the model, starting from the input embeddings to the final distributions for the answer span.
@@ -128,7 +138,7 @@ class QAModel(object):
             Important: these are -large in the pad locations. Necessary for when we feed into the cross entropy function.
           self.probdist_start, self.probdist_end: Both shape (batch_size, context_len). Each row sums to 1.
             These are the result of taking (masked) softmax of logits_start and logits_end.
-        """
+       """
 
         # Use a RNN to get hidden states for the context and the question
         # Note: here the RNNEncoder is shared (i.e. the weights are the same)

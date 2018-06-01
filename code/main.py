@@ -53,6 +53,12 @@ tf.app.flags.DEFINE_integer("context_len", 600, "The maximum context length of y
 tf.app.flags.DEFINE_integer("question_len", 30, "The maximum question length of your model")
 tf.app.flags.DEFINE_integer("embedding_size", 100, "Size of the pretrained word vectors. This needs to be one of the available GloVe dimensions: 50/100/200/300")
 
+#Added Hyperparameters
+tf.app.flags.DEFINE_integer("word_len",30,"maximum word length");
+tf.app.flags.DEFINE_integer("CNN_ker_size", 5, "kernal_size")
+tf.app.flags.DEFINE_integer("CNN_filters", 100, "output_size")
+tf.app.flags.DEFINE_integer("CNN_stride", 1, "filter stride")
+
 # How often to print, save, eval
 tf.app.flags.DEFINE_integer("print_every", 1, "How many iterations to do per print.")
 tf.app.flags.DEFINE_integer("save_every", 500, "How many iterations to do per save.")
