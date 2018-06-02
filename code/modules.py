@@ -133,6 +133,7 @@ class AttentionFlowLayer(object):
             When it will be introduced, init:
              keep_prob,lambda
             """
+
     def sim_matrix(self, context_vectors, n_context_vectors, question_vectors, n_question_vectors, batch_size,vector_size):
 
             """Goal: W_sim^T [c; q; c*q] of shape
@@ -146,21 +147,43 @@ class AttentionFlowLayer(object):
             """
 
             """c; of shape: batch_size,n,2h ->  batch_size,n,1,2h"""
-            c = tf.expand_dims(context_vectors, 2)
-            c = tf.tile(c, [1,1,n_question_vectors,1])
-            """c; of shape: batch_size,m,2h ->  batch_size,1,m,2h"""
-            q = tf.expand_dims(question_vectors, 1)
-            q = tf.tile(q, [1,n_context_vectors,1,1])
-            c_mul_q = tf.expand_dims(context_vectors, 2) * tf.expand_dims(question_vectors, 1)
-            """ [c; q; c*q] shape batch_size,n,m,6h  """
-            x = tf.concat([c,q,c_mul_q],3)
-            x = tf.reshape(x,[-1, 3*vector_size])
-            y_cont = tf_layers.fully_connected(x,1, activation_fn=None)
-            y_cont = tf.reshape(y_cont,[-1,n_context_vectors, n_question_vectors]);
+            # c = tf.expand_dims(context_vectors, 2)
+            # c = tf.tile(c, [1,1,n_question_vectors,1])
+            # """c; of shape: batch_size,m,2h ->  batch_size,1,m,2h"""
+            # q = tf.expand_dims(question_vectors, 1)
+            # q = tf.tile(q, [1,n_context_vectors,1,1])
+            # c_mul_q = tf.expand_dims(context_vectors, 2) * tf.expand_dims(question_vectors, 1)
+            # """ [c; q; c*q] shape batch_size,n,m,6h  """
+            # x = tf.concat([c,q,c_mul_q],3)
+            # x = tf.reshape(x,[-1, 3*vector_size])
+            # y_cont = tf_layers.fully_connected(x,1, activation_fn=None)
+            # y_cont = tf.reshape(y_cont,[-1,n_context_vectors, n_question_vectors]);
+            # Prepare each of the inputs for the linearity.
+            x_c = tf.reshape(context_vectors, [-1, vector_size])
+            x_q = tf.reshape(question_vectors, [-1, vector_size])
+            x_cq = tf.reshape(tf.expand_dims(context_vectors, 2) * tf.expand_dims(question_vectors, 1), [-1, vector_size])
+
+            # Perform dropout on each input.
+            # x_c = tf.nn.dropout(x_c, self.keep_prob)
+            # x_q = tf.nn.dropout(x_q, self.keep_prob)
+            # x_cq = tf.nn.dropout(x_cq, self.keep_prob)
+
+            # For memory efficiency, we compute the linearity piecewise over c, q, and c*q.
+            y_c = tf_layers.fully_connected(x_c, 1, activation_fn=None,
+                                            weights_regularizer=tf_layers.l2_regularizer(scale=self.l2_lambda))
+            y_q = tf_layers.fully_connected(x_q, 1, activation_fn=None,
+                                            weights_regularizer=tf_layers.l2_regularizer(scale=self.l2_lambda))
+            y_cq = tf_layers.fully_connected(x_cq, 1, activation_fn=None,
+                                             weights_regularizer=tf_layers.l2_regularizer(scale=self.l2_lambda))
+
+            # Prepare to add each component together.
+            y_c = tf.reshape(y_c, [-1, n_context_vectors, 1])
+            y_q = tf.reshape(y_q, [-1, 1, n_question_vectors])
+            y_cq = tf.reshape(y_cq, [-1, n_context_vectors, n_question_vectors])
 
             # Assert(y_cqcq.shape == (batch_size,n_context_vectors, n_question_vectors ))
 
-            return y_cont
+            return y_cq
 
     def beta_func(self,context_vectors, c2q_attn, q2c_attn):
         """Apply the beta function for bidaf attention flow
