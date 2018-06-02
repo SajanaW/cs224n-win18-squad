@@ -169,12 +169,11 @@ class AttentionFlowLayer(object):
             # x_cq = tf.nn.dropout(x_cq, self.keep_prob)
 
             # For memory efficiency, we compute the linearity piecewise over c, q, and c*q.
-            y_c = tf_layers.fully_connected(x_c, 1, activation_fn=None,
-                                            weights_regularizer=tf_layers.l2_regularizer(scale=self.l2_lambda))
-            y_q = tf_layers.fully_connected(x_q, 1, activation_fn=None,
-                                            weights_regularizer=tf_layers.l2_regularizer(scale=self.l2_lambda))
-            y_cq = tf_layers.fully_connected(x_cq, 1, activation_fn=None,
-                                             weights_regularizer=tf_layers.l2_regularizer(scale=self.l2_lambda))
+            y_c = tf_layers.fully_connected(x_c, 1, activation_fn=None)
+
+            y_q = tf_layers.fully_connected(x_q, 1, activation_fn=None)
+
+            y_cq = tf_layers.fully_connected(x_cq, 1, activation_fn=None)
 
             # Prepare to add each component together.
             y_c = tf.reshape(y_c, [-1, n_context_vectors, 1])
