@@ -51,7 +51,7 @@ tf.app.flags.DEFINE_integer("batch_size", 100, "Batch size to use")
 tf.app.flags.DEFINE_integer("hidden_size", 200, "Size of the hidden states")
 tf.app.flags.DEFINE_integer("context_len", 400, "The maximum context length of your model") #600
 tf.app.flags.DEFINE_integer("question_len", 20, "The maximum question length of your model") #30
-tf.app.flags.DEFINE_integer("embedding_size", 50, "Size of the pretrained word vectors. This needs to be one of the available GloVe dimensions: 50/100/200/300") #100
+tf.app.flags.DEFINE_integer("embedding_size", 100, "Size of the pretrained word vectors. This needs to be one of the available GloVe dimensions: 50/100/200/300") #100
 
 #Added Hyperparameters
 tf.app.flags.DEFINE_integer("word_len",30,"maximum word length");
