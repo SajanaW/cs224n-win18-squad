@@ -170,7 +170,7 @@ def preprocess_and_write(dataset, tier, out_dir):
       the number of (context, question, answer) triples written to file by the dataset.
     """
     #Set to true to see a graph of the context/question lengths.
-    dataVisualization = False
+    dataVisualization = True;
 
     num_exs = 0 # number of examples written to file
     num_mappingprob, num_tokenprob, num_spanalignprob = 0, 0, 0
