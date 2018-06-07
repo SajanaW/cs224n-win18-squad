@@ -27,6 +27,38 @@ _START_VOCAB = [_PAD, _UNK]
 PAD_ID = 0
 UNK_ID = 1
 
+def get_char_embs(char_emb_path, char_emb_size,a_size=94):
+    """Get pretrained character embeddings and a dictionary mapping characters to their IDs.
+    The pretrained character embeddings were retrieved under MIT license from
+    X!
+    Skips IDs 0 and 1, since these are reserved for PAD and UNK, respectively.
+    Input:
+      char_emb_path: path to glove.840B.{char_embedding_size}d-char.txt. If None, use random initialization.
+      char_embedding_size: Size of character embeddings
+    Returns:
+      char_emb_matrix: Numpy array shape (1426, char_embedding_size) containing char embeddings.
+      char2id: dict. Maps chars (string) to their IDs (int).
+    """
+    char_emb_matrix = []
+    char2id = {}
+    index = 0
+    with open(char_emb_path, 'r') as file:
+        for line in tqdm(file, total=a_size):
+            line = line.lstrip().rstrip().split(" ")
+            char = line[0]
+            vector = list(map(float, line[1:]))
+            assert char_emb_size == len(vector)
+            char_emb_matrix.append(vector)
+            char2id[char] = index
+            index += 1
+
+    char_emb_matrix = np.array(char_emb_matrix, dtype=np.float32)
+    return char_emb_matrix, char2id
+
+
+
+
+
 
 def get_glove(glove_path, glove_dim):
     """Reads from original GloVe .txt file and returns embedding matrix and

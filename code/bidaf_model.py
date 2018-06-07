@@ -30,7 +30,7 @@ from tensorflow.python.ops import embedding_ops
 from evaluate import exact_match_score, f1_score
 from data_batcher import get_batch_generator
 from pretty_print import print_example
-from modules import RNNEncoder, SimpleSoftmaxLayer, BasicAttn,AttentionFlowLayer
+from modules import RNNEncoder, SimpleSoftmaxLayer, BasicAttn,AttentionFlowLayer,char_cnn
 
 logging.basicConfig(level=logging.INFO)
 
@@ -38,7 +38,7 @@ logging.basicConfig(level=logging.INFO)
 class QAModel(object):
     """Top-level Question Answering module"""
 
-    def __init__(self, FLAGS, id2word, word2id, emb_matrix):
+    def __init__(self, FLAGS, id2word, word2id, emb_matrix,char_emb_matrix ,char2id):
         """
         Initializes the QA model.
 
@@ -53,13 +53,16 @@ class QAModel(object):
         self.id2word = id2word
         self.word2id = word2id
 
+        self.char2id = char2id
+
         # Add all parts of the graph
         with tf.variable_scope("QAModel", initializer=tf.contrib.layers.variance_scaling_initializer(factor=1.0, uniform=True)):
             self.add_placeholders()
-            self.add_embedding_layer(emb_matrix)
+            self.add_embedding_layer(emb_matrix,char_emb_matrix)
             self.build_graph()
             self.add_loss()
 
+        exit();
 
         # Define trainable parameters, gradient, gradient norm, and clip by gradient norm
         params = tf.trainable_variables()
@@ -106,7 +109,7 @@ class QAModel(object):
         self.keep_prob = tf.placeholder_with_default(1.0, shape=())
 
 
-    def add_embedding_layer(self, emb_matrix):
+    def add_embedding_layer(self, emb_matrix, char_embeddings):
         """
         Adds word embedding layer to the graph.
 
@@ -115,6 +118,24 @@ class QAModel(object):
             The GloVe vectors, plus vectors for PAD and UNK.
         """
         with vs.variable_scope("embeddings"):
+            #character embedds
+            self.FLAGS.context_len
+            char_emb_matrix = tf.get_variable("char_emb_matrix",
+                                              dtype=tf.float32,
+                                              initializer=tf.constant(char_embeddings, dtype=tf.float32),
+                                              trainable=True)
+            context_character_embs = embedding_ops.embedding_lookup(char_emb_matrix, self.context_word_ids)
+            # Shape: (batch_size, question_len, word_len, char_emb_size)
+            question_character_embs = embedding_ops.embedding_lookup(char_emb_matrix, self.question_word_ids)
+
+            #Set up the Character encoder
+            char_encoder = char_cnn(self.FLAGS.CNN_ker_size, self.FLAGS.CNN_filters,self.FLAGS.CNN_stride, self.FLAGS.char_emb_size,1 - self.FLAGS.dropout)
+            # Shape: (batch_size, context_len, char_emb_size)
+            context_character_embs = char_encoder.build_graph(context_character_embs, self.FLAGS.context_len, self.FLAGS.word_len)
+            # Shape: (batch_size, question_len, char_emb_size)
+            question_character_embs = char_encoder.build_graph(question_character_embs, self.FLAGS.question_len, self.FLAGS.word_len, reuse=True)
+
+
 
             # Note: the embedding matrix is a tf.constant which means it's not a trainable parameter
             embedding_matrix = tf.constant(emb_matrix, dtype=tf.float32, name="emb_matrix") # shape (400002, embedding_size)
@@ -124,10 +145,13 @@ class QAModel(object):
             self.context_embs = embedding_ops.embedding_lookup(embedding_matrix, self.context_ids) # shape (batch_size, context_len, embedding_size)
             self.qn_embs = embedding_ops.embedding_lookup(embedding_matrix, self.qn_ids) # shape (batch_size, question_len, embedding_size)
 
-    def add_char_cnn_layer(self):
-        """
-        Adds character embedding layer to the graph.
-        """
+
+
+
+            #ultimately concat it: ALSO CHANGE THE NAMES
+            self.context_embs = tf.concat([self.context_embs, context_character_embs], 2)
+            self.qn_embs = tf.concat([self.qn_embs, question_character_embs], 2)
+
 
 
     def build_graph(self):

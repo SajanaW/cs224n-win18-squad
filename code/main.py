@@ -26,7 +26,7 @@ import logging
 import tensorflow as tf
 
 from bidaf_model import QAModel #or do  from bidaf_model ..
-from vocab import get_glove
+from vocab import get_glove, get_char_embs
 from official_eval_helper import get_json_data, generate_answers
 
 
@@ -52,7 +52,7 @@ tf.app.flags.DEFINE_integer("hidden_size", 200, "Size of the hidden states")
 tf.app.flags.DEFINE_integer("context_len", 400, "The maximum context length of your model") #600
 tf.app.flags.DEFINE_integer("question_len", 20, "The maximum question length of your model") #30
 tf.app.flags.DEFINE_integer("embedding_size", 100, "Size of the pretrained word vectors. This needs to be one of the available GloVe dimensions: 50/100/200/300") #100
-
+tf.app.flags.DEFINE_integer("char_emb_size", 300, "Size of the pretrained char vectors.") #100
 #Added Hyperparameters
 tf.app.flags.DEFINE_integer("word_len",30,"maximum word length");
 tf.app.flags.DEFINE_integer("CNN_ker_size", 5, "kernal_size")
@@ -68,6 +68,7 @@ tf.app.flags.DEFINE_integer("keep", 1, "How many checkpoints to keep. 0 indicate
 # Reading and saving data
 tf.app.flags.DEFINE_string("train_dir", "", "Training directory to save the model parameters and other info. Defaults to experiments/{experiment_name}")
 tf.app.flags.DEFINE_string("glove_path", "", "Path to glove .txt file. Defaults to data/glove.6B.{embedding_size}d.txt")
+tf.app.flags.DEFINE_string("char_emb_path", "", "Path to glove char pretrained .txt file. Defaults to data/glove.300B.{char_emb_size}d.txt") #Pretrained Chars
 tf.app.flags.DEFINE_string("data_dir", DEFAULT_DATA_DIR, "Where to find preprocessed SQuAD data for training. Defaults to data/")
 tf.app.flags.DEFINE_string("ckpt_load_dir", "", "For official_eval mode, which directory to load the checkpoint fron. You need to specify this for official_eval mode.")
 tf.app.flags.DEFINE_string("json_in_path", "", "For official_eval mode, path to JSON input file. You need to specify this for official_eval_mode.")
@@ -126,9 +127,10 @@ def main(unused_argv):
 
     # Define path for glove vecs
     FLAGS.glove_path = FLAGS.glove_path or os.path.join(DEFAULT_DATA_DIR, "glove.6B.{}d.txt".format(FLAGS.embedding_size))
-
+    FLAGS.char_emb_path = FLAGS.char_emb_path or os.path.join(DEFAULT_DATA_DIR, "glove.840B.{}d-char.txt".format(FLAGS.char_emb_size))
     # Load embedding matrix and vocab mappings
     emb_matrix, word2id, id2word = get_glove(FLAGS.glove_path, FLAGS.embedding_size)
+
 
     # Get filepaths to train/dev datafiles for tokenized queries, contexts and answers
     train_context_path = os.path.join(FLAGS.data_dir, "train.context")
@@ -138,8 +140,15 @@ def main(unused_argv):
     dev_qn_path = os.path.join(FLAGS.data_dir, "dev.question")
     dev_ans_path = os.path.join(FLAGS.data_dir, "dev.span")
 
-    # Initialize model
-    qa_model = QAModel(FLAGS, id2word, word2id, emb_matrix)
+    #A hack to run the Bidaf vs the baselinebidaf:
+    if FLAGS.experiment_name == "bidafbaseline":
+        # Initialize model
+        qa_model = QAModel(FLAGS, id2word, word2id, emb_matrix)
+    else:
+        #model with char embeddings
+        char_emb_matrix, char2id = get_char_embs(FLAGS.char_emb_path, FLAGS.char_emb_size);
+        qa_model = QAModel(FLAGS, id2word, word2id, emb_matrix,char_emb_matrix,char2id)
+
 
     # Some GPU settings
     config=tf.ConfigProto()

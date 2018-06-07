@@ -304,18 +304,26 @@ def masked_softmax(logits, mask, dim):
     prob_dist = tf.nn.softmax(masked_logits, dim)
     return masked_logits, prob_dist
 
-def char_cnn():
+class char_cnn(object):
     """ Author: Sajana Weerawardhena
         Drawn from Paper: BiDaf
         Implementing a simple char_cnn for character embedding layer.
     """
-    def __init__(self,kernel_size,CNN_filters, stride):
+    def __init__(self, kernel_size, CNN_filters, stride, char_emb_size, keep_prob):
         """ A simple init"""
-        self.kernal_size = kernal_size;
-        self.CNN_filters = CNN_filters;
+        self.kernel_size = kernel_size
+        self.CNN_filters = CNN_filters
         self.stride = stride
-    def build_graph(self,word_ids,):
-        pass;
-        # with ...
-        #     y_conv = tf_layers.conv1d(inputs= word_ids, filters=self.CNN_filters,kernel_size=self.kernal_size ,strides=stride, activation=softmax,trainable=True);
-        # return y_conv
+        self.char_emb_size = char_emb_size
+        self.keep_prob = keep_prob
+
+    def build_graph(self, char_embeddings, cq_len, word_len,reuse=False):
+        with vs.variable_scope("char_cnn", reuse=reuse):
+            char_embeddings = tf.reshape(char_embeddings, [-1, word_len, self.char_emb_size])
+            char_embeddings = tf.nn.dropout(char_embeddings, self.keep_prob)
+            char_embeddings = tf.layers.conv1d(inputs= char_embeddings, filters=self.CNN_filters,
+                                kernel_size=self.kernel_size, activation=tf.nn.relu,
+                                strides=self.stride, trainable=True, padding="VALID");
+            char_embeddings = tf.reduce_max(char_embeddings, axis=1)
+            char_embeddings = tf.reshape(char_embeddings, [-1, cq_len, self.char_emb_size])
+        return char_embeddings
