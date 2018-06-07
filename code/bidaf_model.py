@@ -62,7 +62,6 @@ class QAModel(object):
             self.build_graph()
             self.add_loss()
 
-        exit();
 
         # Define trainable parameters, gradient, gradient norm, and clip by gradient norm
         params = tf.trainable_variables()
