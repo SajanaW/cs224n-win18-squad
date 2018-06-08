@@ -58,6 +58,7 @@ tf.app.flags.DEFINE_integer("word_len",30,"maximum word length");
 tf.app.flags.DEFINE_integer("CNN_ker_size", 5, "kernal_size")
 tf.app.flags.DEFINE_integer("CNN_filters", 100, "output_size")
 tf.app.flags.DEFINE_integer("CNN_stride", 1, "filter stride")
+tf.app.flags.DEFINE_integer("l2_lambda", 3e-7,"regularising constant")
 
 # How often to print, save, eval
 tf.app.flags.DEFINE_integer("print_every", 1, "How many iterations to do per print.")

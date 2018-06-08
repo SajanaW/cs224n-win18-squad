@@ -79,6 +79,15 @@ def sentence_to_token_ids(sentence, word2id):
     ids = [word2id.get(w, UNK_ID) for w in tokens]
     return tokens, ids
 
+def sentence_to_char_ids(sentence,char2id):
+    """Turns an already-tokenized sentence string into char indices
+    e.g. "i do n't know" -> [12,13,14,15,22,15,123 ... 32, 16, 96]
+    Note any token that isn't in the char2id mapping gets mapped to the id for UNK
+    """
+    tokens = split_by_whitespace(sentence) # list of strings
+    ids = [word2id.get(w, UNK_ID) for w in tokens]
+    return tokens, ids
+
 
 def padded(token_batch, batch_pad=0):
     """
@@ -211,6 +220,12 @@ def get_batch_generator(word2id, context_path, qn_path, ans_path, batch_size, co
 
         # Make ans_span into a np array
         ans_span = np.array(ans_span) # shape (batch_size, 2)
+
+        #Need to set up the batch context_word_ids and the question_word_ids
+        #Need to further edit the Batch object with Nones and such
+
+
+
 
         # Make into a Batch object
         batch = Batch(context_ids, context_mask, context_tokens, qn_ids, qn_mask, qn_tokens, ans_span, ans_tokens)

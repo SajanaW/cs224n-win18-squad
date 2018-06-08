@@ -38,7 +38,7 @@ logging.basicConfig(level=logging.INFO)
 class QAModel(object):
     """Top-level Question Answering module"""
 
-    def __init__(self, FLAGS, id2word, word2id, emb_matrix,char_emb_matrix ,char2id):
+    def __init__(self, FLAGS, id2word, word2id, emb_matrix,char_emb_matrix = None ,char2id = None):
         """
         Initializes the QA model.
 
@@ -62,7 +62,6 @@ class QAModel(object):
             self.build_graph()
             self.add_loss()
 
-
         # Define trainable parameters, gradient, gradient norm, and clip by gradient norm
         params = tf.trainable_variables()
         gradients = tf.gradients(self.loss, params)
@@ -74,11 +73,9 @@ class QAModel(object):
         # (updates is what you need to fetch in session.run to do a gradient update)
         self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
-        """@Saj Try different Betas here"""
         opt = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate) # you can try other optimizers
         self.updates = opt.apply_gradients(zip(clipped_gradients, params), global_step=self.global_step)
 
-        """Include Batch Norm? """
 
         # Define savers (for checkpointing) and summaries (for tensorboard)
         self.saver = tf.train.Saver(tf.global_variables(), max_to_keep=FLAGS.keep)
@@ -99,9 +96,11 @@ class QAModel(object):
         self.qn_mask = tf.placeholder(tf.int32, shape=[None, self.FLAGS.question_len])
         self.ans_span = tf.placeholder(tf.int32, shape=[None, 2])
 
+
+        #TODO: NEW THINGS: (1 - undo this)
         #going to be plugged into the 1char_cnn
-        self.context_word_ids = tf.placeholder(tf.int32,shape=[None,self.FLAGS.context_len, self.FLAGS.word_len])
-        self.question_word_ids = tf.placeholder(tf.int32,shape=[None,self.FLAGS.question_len, self.FLAGS.word_len])
+        # self.context_word_ids = tf.placeholder(tf.int32,shape=[None,self.FLAGS.context_len, self.FLAGS.word_len])
+        # self.question_word_ids = tf.placeholder(tf.int32,shape=[None,self.FLAGS.question_len, self.FLAGS.word_len])
 
         # Add a placeholder to feed in the keep probability (for dropout).
         # This is necessary so that we can instruct the model to use dropout when training, but not when testing
@@ -117,24 +116,24 @@ class QAModel(object):
             The GloVe vectors, plus vectors for PAD and UNK.
         """
         with vs.variable_scope("embeddings"):
-            #character embedds
-            self.FLAGS.context_len
-            char_emb_matrix = tf.get_variable("char_emb_matrix",
-                                              dtype=tf.float32,
-                                              initializer=tf.constant(char_embeddings, dtype=tf.float32),
-                                              trainable=True)
-            context_character_embs = embedding_ops.embedding_lookup(char_emb_matrix, self.context_word_ids)
-            # Shape: (batch_size, question_len, word_len, char_emb_size)
-            question_character_embs = embedding_ops.embedding_lookup(char_emb_matrix, self.question_word_ids)
-
-            #Set up the Character encoder
-            char_encoder = char_cnn(self.FLAGS.CNN_ker_size, self.FLAGS.CNN_filters,self.FLAGS.CNN_stride, self.FLAGS.char_emb_size,1 - self.FLAGS.dropout)
-            # Shape: (batch_size, context_len, char_emb_size)
-            context_character_embs = char_encoder.build_graph(context_character_embs, self.FLAGS.context_len, self.FLAGS.word_len)
-            # Shape: (batch_size, question_len, char_emb_size)
-            question_character_embs = char_encoder.build_graph(question_character_embs, self.FLAGS.question_len, self.FLAGS.word_len, reuse=True)
-
-
+            # #character embedds undo 2
+            # char_emb_matrix = tf.get_variable("char_emb_matrix",
+            #                                   dtype=tf.float32,
+            #                                   initializer=tf.constant(char_embeddings, dtype=tf.float32),
+            #                                   trainable=True)
+            #
+            # context_character_embs = embedding_ops.embedding_lookup(char_emb_matrix, self.context_word_ids)
+            # # Shape: (batch_size, question_len, word_len, char_emb_size)
+            # question_character_embs = embedding_ops.embedding_lookup(char_emb_matrix, self.question_word_ids)
+            #
+            # #Set up the Character encoder
+            # char_encoder = char_cnn(self.FLAGS.CNN_ker_size, self.FLAGS.CNN_filters,self.FLAGS.CNN_stride, self.FLAGS.char_emb_size,self.keep_prob)
+            # # Shape: (batch_size, context_len, char_emb_size)
+            # context_character_embs = char_encoder.build_graph(context_character_embs, self.FLAGS.context_len, self.FLAGS.word_len)
+            # # Shape: (batch_size, question_len, char_emb_size)
+            # question_character_embs = char_encoder.build_graph(question_character_embs, self.FLAGS.question_len, self.FLAGS.word_len, reuse=True)
+            #
+            #
 
             # Note: the embedding matrix is a tf.constant which means it's not a trainable parameter
             embedding_matrix = tf.constant(emb_matrix, dtype=tf.float32, name="emb_matrix") # shape (400002, embedding_size)
@@ -144,12 +143,9 @@ class QAModel(object):
             self.context_embs = embedding_ops.embedding_lookup(embedding_matrix, self.context_ids) # shape (batch_size, context_len, embedding_size)
             self.qn_embs = embedding_ops.embedding_lookup(embedding_matrix, self.qn_ids) # shape (batch_size, question_len, embedding_size)
 
-
-
-
-            #ultimately concat it: ALSO CHANGE THE NAMES
-            self.context_embs = tf.concat([self.context_embs, context_character_embs], 2)
-            self.qn_embs = tf.concat([self.qn_embs, question_character_embs], 2)
+            # undo (3)
+            # self.context_embs = tf.concat([self.context_embs, context_character_embs], 2)
+            # self.qn_embs = tf.concat([self.qn_embs, question_character_embs], 2)
 
 
 
@@ -173,17 +169,18 @@ class QAModel(object):
 
 
         # Use context hidden states to attend to question hidden states
-        biattn_layer = AttentionFlowLayer();
+        biattn_layer = AttentionFlowLayer(self.keep_prob, self.FLAGS.l2_lambda);
         biattn_output = biattn_layer.build_graph(context_hiddens,self.context_mask, question_hiddens, self.qn_mask, scope="AttnFlow")
 
-
-        # Concat attn_output to context_hiddens to get blended_reps
-        # blended_reps = tf.concat([context_hiddens, biattn_output], axis=2) # (batch_size, context_len, hidden_size*4)
+        #RNNEncoder layer
+        model_layer = RNNEncoder(self.FLAGS.hidden_size, self.keep_prob)
+        model_output = encoder.build_graph(self.context_embs, self.context_mask)
+        #Fully connected
 
         # Apply fully connected layer to each blended representation
         # Note, blended_reps_final corresponds to b' in the handout
         # Note, tf.contrib.layers.fully_connected applies a ReLU non-linarity here by default
-        blended_reps_final = tf.contrib.layers.fully_connected(biattn_output, num_outputs=self.FLAGS.hidden_size) # blended_reps_final is shape (batch_size, context_len, hidden_size)
+        blended_reps_final = tf.contrib.layers.fully_connected(model_output, num_outputs=self.FLAGS.hidden_size) # blended_reps_final is shape (batch_size, context_len, hidden_size)
 
         # Use softmax layer to compute probability distribution for start location
         # Note this produces self.logits_start and self.probdist_start, both of which have shape (batch_size, context_len)
@@ -259,6 +256,8 @@ class QAModel(object):
         input_feed[self.qn_mask] = batch.qn_mask
         input_feed[self.ans_span] = batch.ans_span
         input_feed[self.keep_prob] = 1.0 - self.FLAGS.dropout # apply dropout
+
+        #Need an input feed TODO:
 
         # output_feed contains the things we want to fetch.
         output_feed = [self.updates, self.summaries, self.loss, self.global_step, self.param_norm, self.gradient_norm]

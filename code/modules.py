@@ -22,19 +22,10 @@ from tensorflow.python.ops import rnn_cell
 
 
 class RNNEncoder(object):
+
     """
     General-purpose module to encode a sequence using a RNN.
     It feeds the input through a RNN and returns all the hidden states.
-
-    Note: In lecture 8, we talked about how you might use a RNN as an "encoder"
-    to get a single, fixed size vector representation of a sequence
-    (e.g. by taking element-wise max of hidden states).
-    Here, we're using the RNN as an "encoder" but we're not taking max;
-    we're just returning all the hidden states. The terminology "encoder"
-    still applies because we're getting a different "encoding" of each
-    position in the sequence, and we'll use the encodings downstream in the model.
-
-    This code uses a bidirectional GRU, but you could experiment with other types of RNN.
     """
 
     def __init__(self, hidden_size, keep_prob):
@@ -119,20 +110,17 @@ class SimpleSoftmaxLayer(object):
 
 class AttentionFlowLayer(object):
     """ Author: Sajana Weerawardhena
-        Drawn from Paper: BiDaf
-        and implementations online: ""
-        TODO: Connect this to QA Model
-        This layer is the Attention Flow Layer described in the Bidaf Paper
-        that you can find here: (URL)
-
+        Drawn from Paper: BiDAF
     """
 
-    def __init__(self):
+    def __init__(self, keep_prob, l2_lambda):
         """ For the moment, not going to introduce dropout
             regularizing lambdas for the fully connected layers.
             When it will be introduced, init:
              keep_prob,lambda
             """
+        self.keep_prob = keep_prob;
+        self.l2_lambda = l2_lambda;
 
     def sim_matrix(self, context_vectors, n_context_vectors, question_vectors, n_question_vectors, batch_size,vector_size):
 
@@ -146,7 +134,25 @@ class AttentionFlowLayer(object):
                 siml_mat : (type: tensor) Similarity matrix  (batch_size, n_context_vectors, n_question_vectors).
             """
 
-            """c; of shape: batch_size,n,2h ->  batch_size,n,1,2h"""
+            #naive implementation: not practical because it leads to OOM errors
+              #first expand the dimensions of reshape context_vectors:
+                # expand_dims context_vector: batch_size,n,2h ->  batch_size,n,1,2h
+                # tile : batch_size,n, 1,2h ->  batch_size,n,m,2h
+              #Next expand the dimensions of reshape question_vectors:
+                # expand_dims question_vectors: batch_size,m,2h ->  batch_size,1,m,2h
+                # tile : batch_size,1,m,2h ->  batch_size,n,m,2h
+              #Next expand dims, broadcast and concat context annd q_vectors to size batch_size,n,m,6h :
+                # expand_dims c1 = context_vector: batch_size,n,2h ->  batch_size,n,1,2h
+                # expand_dims c2 = question_vectors: batch_size,m,2h ->  batch_size,1,m,2h
+                # broadcast them: c1 * c2 -> batch_size,n,m,2h
+              # Concat all of them: batch_size,n,m,6h
+              #reshape them into and array of 6h units - that is a unit of question+context+c*q
+              # push it through a fully connected layer with 1 hidden unit and no activation
+              # so the 6h -> 1 value.
+              # reshape the output to shape -1,n_context_vectors, n_question_vectors
+            #This was initially implemented and then failed due to OOM Errors.
+            # The code for it:
+            # """c; of shape: batch_size,n,2h ->  batch_size,n,1,2h"""
             # c = tf.expand_dims(context_vectors, 2)
             # c = tf.tile(c, [1,1,n_question_vectors,1])
             # """c; of shape: batch_size,m,2h ->  batch_size,1,m,2h"""
@@ -158,33 +164,78 @@ class AttentionFlowLayer(object):
             # x = tf.reshape(x,[-1, 3*vector_size])
             # y_cont = tf_layers.fully_connected(x,1, activation_fn=None)
             # y_cont = tf.reshape(y_cont,[-1,n_context_vectors, n_question_vectors]);
-            # Prepare each of the inputs for the linearity.
-            x_c = tf.reshape(context_vectors, [-1, vector_size])
-            x_q = tf.reshape(question_vectors, [-1, vector_size])
-            x_cq = tf.reshape(tf.expand_dims(context_vectors, 2) * tf.expand_dims(question_vectors, 1), [-1, vector_size])
 
-            # Perform dropout on each input.
-            # x_c = tf.nn.dropout(x_c, self.keep_prob)
-            # x_q = tf.nn.dropout(x_q, self.keep_prob)
-            # x_cq = tf.nn.dropout(x_cq, self.keep_prob)
+            #Smart implementation- burrowed from online implementations involve linearity.
+            #context_vectors is of shape: batch_size,n,2h
+                    # example:
+                    # [ context1:[ context1_word1:[1, 1, 1], context1_word2:[1, 1, 1]]
+                    # context2:[ context2_word1:[1, 1, 1], context2_word2:[1, 1, 1]]]
+            #reshaped size:  -1, 2h
+                    # example:
+                    # [ context1_word1:[1, 1, 1], context1_word2:[1, 1, 1]
+                    #   context2_word1:[1, 1, 1], context2_word2:[1, 1, 1]]
+                    # so just an array of context words.
+            input_c = tf.reshape(context_vectors, [-1, vector_size])
+            #question_vectors is of shape: batch_size,m,2h
+                    # example:
+                    # [ q1:[ q1_word1:[1, 1, 1], q1_word2:[1, 1, 1]]
+                    # q2:[ q2_word1:[1, 1, 1], q2_word2:[1, 1, 1]]]
+            #reshaped size:  -1, 2h
+                    # example:
+                    # [ q1_word1:[1, 1, 1], q1_word2:[1, 1, 1],
+                    #   q2_word1:[1, 1, 1], q2_word2:[1, 1, 1] ]
+                    # so just an array of question words.
+            input_q = tf.reshape(question_vectors, [-1, vector_size])
+            """c; of shape: batch_size,n,2h ->  batch_size,n,1,2h"""
+            #Next expand dims, broadcast and concat context annd q_vectors to size batch_size,n,m,6h :
+                    # expand_dims c1 = context_vector: batch_size,n,2h ->  batch_size,n,1,2h
+                    # expand_dims c2 = question_vectors: batch_size,m,2h ->  batch_size,1,m,2h
+                    # broadcast them: c1 * c2 -> batch_size,n,m,2h
+            #Then reshape them:
+                    #reshape them into and array of 2h units - that is a unit of c*q
+                    #For clarity for myself and a naive reader:
+                    # when broad casting:
+                    # What we have for the context vector after expanded dims and after broadcasting
+                    # [ context1:[
+                    #    context1_word1:[q1:[1, 1, 1], q2:[same-as-c1w1q1] ... qn:[same-as-c1w1q1]],
+                    #    context1_word2:[q1:[distinct-c1w2], q2:[same-as-c1w2q2] ... qn:[same-as-c1w2q2]],
+                    #    .....
+                    #    context1_wordm:[q1:[distinct-c1wm], q2:[same-as-c1wmqn] ... qn:[same-as-c1wmqn]],
+                    #    ]
+                    #    ......
+                    #    contextm:    ]]
+                    # post broadcasting:
+                    #   [ context1:[
+                    #    context1_word1:[q1:[1, 1, 1], q2:[distinct-q2] ... qn:[distinct-qn]],
+                    #    context1_word2: [same-as-context1-word1],
+                    #    .....
+                    #    context1_wordm:[same-as-context1-word1],
+                    #    ]
+                    #    ......
+                    #    contextm:    ]]
+            input_cq = tf.reshape(tf.expand_dims(context_vectors, 2) * tf.expand_dims(question_vectors, 1), [-1, vector_size])
+
+            # TODO: Set this up: Perform dropout on each input.
+            input_c = tf.nn.dropout(input_c, self.keep_prob)
+            input_q = tf.nn.dropout(input_q, self.keep_prob)
+            input_cq = tf.nn.dropout(input_cq, self.keep_prob)
 
             # For memory efficiency, we compute the linearity piecewise over c, q, and c*q.
-            y_c = tf_layers.fully_connected(x_c, 1, activation_fn=None)
+            output_c = tf_layers.fully_connected(input_c, 1, activation_fn=None, weights_regularizer=tf_layers.l2_regularizer(scale=self.l2_lambda))
 
-            y_q = tf_layers.fully_connected(x_q, 1, activation_fn=None)
+            output_q = tf_layers.fully_connected(input_q, 1, activation_fn=None, weights_regularizer=tf_layers.l2_regularizer(scale=self.l2_lambda))
 
-            y_cq = tf_layers.fully_connected(x_cq, 1, activation_fn=None)
+            output_cq = tf_layers.fully_connected(input_cq, 1, activation_fn=None, weights_regularizer=tf_layers.l2_regularizer(scale=self.l2_lambda))
 
             # Prepare to add each component together.
-            y_c = tf.reshape(y_c, [-1, n_context_vectors, 1])
-            y_q = tf.reshape(y_q, [-1, 1, n_question_vectors])
-            y_cq = tf.reshape(y_cq, [-1, n_context_vectors, n_question_vectors])
+            output_c = tf.reshape(output_c, [-1, n_context_vectors, 1])
+            output_q = tf.reshape(output_q, [-1, 1, n_question_vectors])
+            output_cq = tf.reshape(output_cq, [-1, n_context_vectors, n_question_vectors])
 
-            # Assert(y_cqcq.shape == (batch_size,n_context_vectors, n_question_vectors ))
+            # then add them up!
+            return output_c + output_q + output_cq
 
-            return y_cq
-
-    def beta_func(self,context_vectors, c2q_attn, q2c_attn):
+    def concat_func(self,context_vectors, c2q_attn, q2c_attn):
         """Apply the beta function for bidaf attention flow
            Goal: concatenate [c, c2q_attn, c * c2q_attn, c * q2c_attn].
         """
@@ -202,19 +253,26 @@ class AttentionFlowLayer(object):
             n_question_vectors = question_vectors.shape.as_list()[1]
             sim_mat = self.sim_matrix(context_vectors, n_context_vectors, question_vectors, n_question_vectors,batch_size, vector_size)
 
-            # c2q
+            #c2q
+            # take row wise softmax and then do mat mul
             question_mask_expanded = tf.expand_dims(q_mask, axis=1)
             _, sim_bar = masked_softmax(sim_mat, question_mask_expanded, 2)
             c2q_attn = tf.matmul(sim_bar, question_vectors)
 
             # q2c
+            # comment this out.
+            # for each context get the maximum j
+            # then take the softmax of these maximums
+            # mat mul with n_context_vectors
             context_mask_expanded = tf.expand_dims(c_mask, axis=2)
+            #TODO: CHANGE THESE
             _, sim_dbl_bar = masked_softmax(sim_mat, context_mask_expanded, 1)
             sim_dbl_bar = tf.transpose(sim_dbl_bar, (0, 2, 1))
             sim_sim = tf.matmul(sim_bar, sim_dbl_bar)
             q2c_attn = tf.matmul(sim_sim, context_vectors)
 
-            outputs = self.beta_func(context_vectors, c2q_attn, q2c_attn)
+            #set up Pretty Print here
+            outputs = self.concat_func(context_vectors, c2q_attn, q2c_attn)
 
         return outputs
 
@@ -300,6 +358,7 @@ def masked_softmax(logits, mask, dim):
         Should sum to 1 over given dimension.
     """
     exp_mask = (1 - tf.cast(mask, 'float')) * (-1e30) # -large where there's padding, 0 elsewhere
+    print exp_mask.shape
     masked_logits = tf.add(logits, exp_mask) # where there's padding, set logits to -large
     prob_dist = tf.nn.softmax(masked_logits, dim)
     return masked_logits, prob_dist
