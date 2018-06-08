@@ -313,7 +313,6 @@ class AttentionFlowLayer(object):
 
             #set up Pretty Print here
             outputs = self.concat_func(context_vectors, c2q_attn, q2c_attn)
-            print outputs.shape
         return outputs
 
 """ The base line attention"""
