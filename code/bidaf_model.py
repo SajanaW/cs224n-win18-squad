@@ -30,7 +30,7 @@ from tensorflow.python.ops import embedding_ops
 from evaluate import exact_match_score, f1_score
 from data_batcher import get_batch_generator
 from pretty_print import print_example
-from modules import RNNEncoder, SimpleSoftmaxLayer, BasicAttn,AttentionFlowLayer,char_cnn
+from modules import RNNEncoder, SimpleSoftmaxLayer, BasicAttn,AttentionFlowLayer,char_cnn, Model_Layer
 
 logging.basicConfig(level=logging.INFO)
 
@@ -52,8 +52,6 @@ class QAModel(object):
         self.FLAGS = FLAGS
         self.id2word = id2word
         self.word2id = word2id
-
-        self.char2id = char2id
 
         # Add all parts of the graph
         with tf.variable_scope("QAModel", initializer=tf.contrib.layers.variance_scaling_initializer(factor=1.0, uniform=True)):
@@ -107,7 +105,7 @@ class QAModel(object):
         self.keep_prob = tf.placeholder_with_default(1.0, shape=())
 
 
-    def add_embedding_layer(self, emb_matrix, char_embeddings):
+    def add_embedding_layer(self, emb_matrix):
         """
         Adds word embedding layer to the graph.
 
@@ -165,6 +163,7 @@ class QAModel(object):
         # Note: here the RNNEncoder is shared (i.e. the weights are the same)
         # between the context and the question.
         encoder = RNNEncoder(self.FLAGS.hidden_size, self.keep_prob)
+        print self.context_embs.shape
         context_hiddens = encoder.build_graph(self.context_embs, self.context_mask) # (batch_size, context_len, hidden_size*2)
         question_hiddens = encoder.build_graph(self.qn_embs, self.qn_mask) # (batch_size, question_len, hidden_size*2)
 
@@ -174,8 +173,8 @@ class QAModel(object):
         biattn_output = biattn_layer.build_graph(context_hiddens,self.context_mask, question_hiddens, self.qn_mask, scope="AttnFlow")
 
         #RNNEncoder layer
-        model_layer = RNNEncoder(self.FLAGS.hidden_size, self.keep_prob)
-        model_output = encoder.build_graph(biattn_output, self.context_mask)
+        model_layer = Model_Layer(self.FLAGS.hidden_size, self.keep_prob)
+        model_output = model_layer.build_graph(biattn_output, self.context_mask)
         #Fully connected
 
         # Apply fully connected layer to each blended representation

@@ -53,7 +53,7 @@ class RNNEncoder(object):
           out: Tensor shape (batch_size, seq_len, hidden_size*2).
             This is all hidden states (fw and bw hidden states are concatenated).
         """
-        with vs.variable_scope("RNNEncoder"):
+        with vs.variable_scope("ModellingLayer"):
             input_lens = tf.reduce_sum(masks, reduction_indices=1) # shape (batch_size)
 
             # Note: fw_out and bw_out are the hidden states for every timestep.
@@ -69,6 +69,46 @@ class RNNEncoder(object):
             return out
 
 
+class Model_Layer(object):
+    def __init__(self, hidden_size, keep_prob):
+        """
+        Inputs:
+          hidden_size: int. Hidden size of the RNN
+          keep_prob: Tensor containing a single scalar that is the keep probability (for dropout)
+        """
+        self.hidden_size = hidden_size
+        self.keep_prob = keep_prob
+        self.rnn_cell_fw = rnn_cell.LSTMCell(self.hidden_size)
+        self.rnn_cell_fw = DropoutWrapper(self.rnn_cell_fw, input_keep_prob=self.keep_prob)
+        self.rnn_cell_bw = rnn_cell.LSTMCell(self.hidden_size)
+        self.rnn_cell_bw = DropoutWrapper(self.rnn_cell_bw, input_keep_prob=self.keep_prob)
+
+    def build_graph(self, inputs, masks):
+        """
+        Inputs:
+          inputs: Tensor shape (batch_size, seq_len, input_size)
+          masks: Tensor shape (batch_size, seq_len).
+            Has 1s where there is real input, 0s where there's padding.
+            This is used to make sure tf.nn.bidirectional_dynamic_rnn doesn't iterate through masked steps.
+
+        Returns:
+          out: Tensor shape (batch_size, seq_len, hidden_size*2).
+            This is all hidden states (fw and bw hidden states are concatenated).
+        """
+        with vs.variable_scope("RNNEncoder"):
+            input_lens = tf.reduce_sum(masks, reduction_indices=1) # shape (batch_size)
+
+            # Note: fw_out and bw_out are the hidden states for every timestep.
+            # Each is shape (batch_size, seq_len, hidden_size).
+            (fw_out, bw_out), _ = tf.nn.bidirectional_dynamic_rnn(self.rnn_cell_fw, self.rnn_cell_bw, inputs, input_lens, dtype=tf.float32)
+
+            # Concatenate the forward and backward hidden states
+            out = tf.concat([fw_out, bw_out], 2)
+
+            # Apply dropout
+            out = tf.nn.dropout(out, self.keep_prob)
+
+            return out
 class SimpleSoftmaxLayer(object):
     """
     Module to take set of hidden states, (e.g. one for each context location),
@@ -273,7 +313,7 @@ class AttentionFlowLayer(object):
 
             #set up Pretty Print here
             outputs = self.concat_func(context_vectors, c2q_attn, q2c_attn)
-
+            print outputs.shape
         return outputs
 
 """ The base line attention"""
@@ -358,7 +398,6 @@ def masked_softmax(logits, mask, dim):
         Should sum to 1 over given dimension.
     """
     exp_mask = (1 - tf.cast(mask, 'float')) * (-1e30) # -large where there's padding, 0 elsewhere
-    print exp_mask.shape
     masked_logits = tf.add(logits, exp_mask) # where there's padding, set logits to -large
     prob_dist = tf.nn.softmax(masked_logits, dim)
     return masked_logits, prob_dist
