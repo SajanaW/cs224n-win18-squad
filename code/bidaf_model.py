@@ -38,7 +38,7 @@ logging.basicConfig(level=logging.INFO)
 class QAModel(object):
     """Top-level Question Answering module"""
 
-    def __init__(self, FLAGS, id2word, word2id, emb_matrix,char_emb_matrix = None ,char2id = None):
+    def __init__(self, FLAGS, id2word, word2id, emb_matrix):
         """
         Initializes the QA model.
 
@@ -58,7 +58,7 @@ class QAModel(object):
         # Add all parts of the graph
         with tf.variable_scope("QAModel", initializer=tf.contrib.layers.variance_scaling_initializer(factor=1.0, uniform=True)):
             self.add_placeholders()
-            self.add_embedding_layer(emb_matrix,char_emb_matrix)
+            self.add_embedding_layer(emb_matrix)
             self.build_graph()
             self.add_loss()
 
@@ -149,6 +149,7 @@ class QAModel(object):
 
 
 
+
     def build_graph(self):
         """Builds the main part of the graph for the model, starting from the input embeddings to the final distributions for the answer span.
 
@@ -174,7 +175,7 @@ class QAModel(object):
 
         #RNNEncoder layer
         model_layer = RNNEncoder(self.FLAGS.hidden_size, self.keep_prob)
-        model_output = encoder.build_graph(self.context_embs, self.context_mask)
+        model_output = encoder.build_graph(biattn_output, self.context_mask)
         #Fully connected
 
         # Apply fully connected layer to each blended representation

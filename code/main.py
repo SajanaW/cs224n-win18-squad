@@ -141,14 +141,16 @@ def main(unused_argv):
     dev_qn_path = os.path.join(FLAGS.data_dir, "dev.question")
     dev_ans_path = os.path.join(FLAGS.data_dir, "dev.span")
 
+
+    qa_model = QAModel(FLAGS, id2word, word2id, emb_matrix)
     #A hack to run the Bidaf vs the baselinebidaf:
-    if FLAGS.experiment_name == "bidafbaseline":
-        # Initialize model
-        qa_model = QAModel(FLAGS, id2word, word2id, emb_matrix)
-    else:
-        #model with char embeddings
-        char_emb_matrix, char2id = get_char_embs(FLAGS.char_emb_path, FLAGS.char_emb_size);
-        qa_model = QAModel(FLAGS, id2word, word2id, emb_matrix,char_emb_matrix,char2id)
+    # if FLAGS.experiment_name == "bidafbaseline":
+    #     # Initialize model
+    #     qa_model = QAModel(FLAGS, id2word, word2id, emb_matrix)
+    # else:
+    #     #model with char embeddings
+    #     char_emb_matrix, char2id = get_char_embs(FLAGS.char_emb_path, FLAGS.char_emb_size);
+    #     qa_model = QAModel(FLAGS, id2word, word2id, emb_matrix,char_emb_matrix,char2id)
 
 
     # Some GPU settings
