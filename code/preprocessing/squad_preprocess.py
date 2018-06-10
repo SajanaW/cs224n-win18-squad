@@ -198,8 +198,8 @@ def preprocess_and_write(dataset, tier, out_dir):
             context = context.lower()
 
             #Preprocessing Choice: Cap Question Lenght at 20
-            if len(context_tokens) > 400:
-                    continue;
+            # if len(context_tokens) > 400:
+            #         continue;
 
             # For debuging purposes:
             if not context_printed and debugging:
@@ -222,8 +222,8 @@ def preprocess_and_write(dataset, tier, out_dir):
                 question = unicode(qn['question']) # string
                 question_tokens = tokenize(question) # list of strings
                 #Preprocessing Choice: Cap Question Lenght at 20
-                if len(question_tokens) > 20:
-                    continue;
+                # if len(question_tokens) > 20:
+                #     continue;
                 if not question_printed and debugging:
                     print "The question:" + question + "\n The length" + str(len(question_tokens))
                     question_printed = True;
@@ -272,10 +272,10 @@ def preprocess_and_write(dataset, tier, out_dir):
         plt.figure(1)
         plt.subplot(211)
         plt.hist(paragraph_context_lengths,30)
-        plt.title('Train Context Word Lengths')
+        plt.title('Train Context Lengths')
         plt.subplot(212)
         plt.hist(question_lengths, 30)
-        plt.title('Train Question Word Lengths')
+        plt.title('Train Question Lengths')
         plt.show()
     # shuffle examples
     indices = range(len(examples))

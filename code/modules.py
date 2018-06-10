@@ -300,15 +300,13 @@ class AttentionFlowLayer(object):
             c2q_attn = tf.matmul(sim_bar, question_vectors)
 
             # q2c
-            # comment this out.
             # for each context get the maximum j
             # then take the softmax of these maximums
             # mat mul with n_context_vectors
             context_mask_expanded = tf.expand_dims(c_mask, axis=2)
-            #TODO: CHANGE THESE
-            _, sim_dbl_bar = masked_softmax(sim_mat, context_mask_expanded, 1)
-            sim_dbl_bar = tf.transpose(sim_dbl_bar, (0, 2, 1))
-            sim_sim = tf.matmul(sim_bar, sim_dbl_bar)
+            _, sim_d = masked_softmax(sim_mat, context_mask_expanded, 1)
+            sim_b = tf.transpose(sim_d, (0, 2, 1))
+            sim_sim = tf.matmul(sim_b, sim_d)
             q2c_attn = tf.matmul(sim_sim, context_vectors)
 
             #set up Pretty Print here
